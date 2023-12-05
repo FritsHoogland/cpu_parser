@@ -1,7 +1,7 @@
-use std::fs::File;
-use std::io::BufRead;
-use std::path::Path;
-use sysctl::Sysctl;
+//use std::fs::File;
+//use std::io::BufRead;
+//use std::path::Path;
+use nix::unistd::{sysconf, SysconfVar};
 
 #[derive(Debug)]
 struct CpuStat {
@@ -69,20 +69,24 @@ fn generate_cpu_states(proc_stat_cpu_line: &str) -> CpuStat
 {
     // Note: some of the last cpu states must be changed to unwrap_or_default()
     // for earlier linux kernel versions.
+    //
     // Note: time in jiffies, must be divided by CONFIG_HZ to show time.
+    let clock_time = sysconf(SysconfVar::CLK_TCK).unwrap_or(Some(1)).unwrap_or(1) as u64;
+    println!("{:?}", clock_time);
+
     let mut splitted = proc_stat_cpu_line.split_whitespace();
     CpuStat {
         name: splitted.next().unwrap().to_string(),
-        user: splitted.next().unwrap().parse::<u64>().unwrap(),
-        nice: splitted.next().unwrap().parse::<u64>().unwrap(),
-        system: splitted.next().unwrap().parse::<u64>().unwrap(),
-        idle: splitted.next().unwrap().parse::<u64>().unwrap(),
-        iowait: splitted.next().unwrap().parse::<u64>().unwrap(),
-        irq: splitted.next().unwrap().parse::<u64>().unwrap(),
-        softirq: splitted.next().unwrap().parse::<u64>().unwrap(),
-        steal: splitted.next().unwrap().parse::<u64>().unwrap(),
-        guest: splitted.next().unwrap().parse::<u64>().unwrap(),
-        guest_nice: splitted.next().unwrap().parse::<u64>().unwrap(),
+        user: ((splitted.next().unwrap().parse::<u64>().unwrap()*1000_u64)/clock_time),
+        nice: ((splitted.next().unwrap().parse::<u64>().unwrap()*1000_u64)/clock_time),
+        system: ((splitted.next().unwrap().parse::<u64>().unwrap()*1000_u64)/clock_time),
+        idle: ((splitted.next().unwrap().parse::<u64>().unwrap()*1000_u64)/clock_time),
+        iowait: ((splitted.next().unwrap_or_default().parse::<u64>().unwrap()*1000_u64)/clock_time),
+        irq: ((splitted.next().unwrap_or_default().parse::<u64>().unwrap()*1000_u64)/clock_time),
+        softirq: ((splitted.next().unwrap_or_default().parse::<u64>().unwrap()*1000_u64)/clock_time),
+        steal: ((splitted.next().unwrap_or_default().parse::<u64>().unwrap()*1000_u64)/clock_time),
+        guest: ((splitted.next().unwrap_or_default().parse::<u64>().unwrap()*1000_u64)/clock_time),
+        guest_nice: ((splitted.next().unwrap_or_default().parse::<u64>().unwrap()*1000_u64)/clock_time),
     }
 }
 fn parse_proc_stat(
@@ -121,13 +125,6 @@ softirq 49934 30 3840 2 1309 11 0 206 7439 0 37097";
 
     let r = parse_proc_stat(lines);
     println!("{}",r);
-
-    //let config_hz = sysctl::Ctl::new("CONFIG_HZ").unwrap();
-    let config_hz = match sysctl::Ctl::new("CONFIG_HZ") {
-        Ok(config_hz)  => config_hz.value_string().unwrap_or("none".to_string()),
-        Err(_) => "none".to_string(),
-    };
-    println!("{}", config_hz);
 
 }
 
