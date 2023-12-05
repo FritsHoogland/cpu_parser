@@ -1,0 +1,108 @@
+use nom::{
+    character::complete::digit1,
+    combinator::{map_res, opt},
+    multi::many1,
+    sequence::separated_pair,
+    IResult,
+};
+
+#[derive(Debug)]
+struct CpuStat {
+    user: u64,
+    nice: u64,
+    system: u64,
+    idle: u64,
+    iowait: u64,
+    irq: u64,
+    softirq: u64,
+    steal: u64,
+    guest: u64,
+    guest_nice: u64,
+}
+
+impl CpuStat {
+    fn new() -> CpuStat {
+        CpuStat {
+            user: 0,
+            nice: 0,
+            system: 0,
+            idle: 0,
+            iowait: 0,
+            irq: 0,
+            softirq: 0,
+            steal: 0,
+            guest: 0,
+            guest_nice: 0,
+        }
+    }
+}
+
+fn parse_cpu_stat(input: &str) -> IResult<&str, CpuStat> {
+    let (input, _) = nom::bytes::complete::tag("cpu")(input)?;
+    let (input, _) = opt(nom::character::complete::space1)(input)?;
+
+    let (input, values) = separated_pair(
+        many1(map_res(digit1, |s: &str| s.parse::<u64>())),
+        nom::character::complete::space1,
+        many1(map_res(digit1, |s: &str| s.parse::<u64>())),
+    )(input)?;
+
+    Ok((
+        input,
+        CpuStat {
+            user: values.0[0],
+            nice: values.0[1],
+            system: values.0[2],
+            idle: values.0[3],
+            iowait: values.0[4],
+            irq: values.0[5],
+            softirq: values.0[6],
+            steal: values.0[7],
+            guest: values.1[0],
+            guest_nice: values.1[1],
+        },
+    ))
+}
+
+fn read_proc_stat() -> CpuStat {
+    let file_content = std::fs::read_to_string("/proc/stat").unwrap();
+    let (_, cpu_stat) = parse_cpu_stat(&file_content).unwrap();
+    cpu_stat
+}
+
+fn main() {
+    let cpu_stat = read_proc_stat();
+    println!("{:?}", cpu_stat);
+/*
+    match read_proc_stat() {
+        Ok(cpu_stat) => println!("{:?}", cpu_stat),
+        Err(err) => eprintln!("Error: {:?}", err),
+    }
+*/
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    #[test]
+    fn parse_base_proc_stat_contents() {
+        let proc_stat = r#"
+cpu  506 0 512 57924 184 0 2 0 0 0
+cpu0 108 0 92 9597 21 0 1 0 0 0
+cpu1 94 0 76 9648 40 0 0 0 0 0
+cpu2 76 0 66 9696 24 0 0 0 0 0
+cpu3 91 0 98 9630 39 0 0 0 0 0
+cpu4 37 0 84 9706 30 0 0 0 0 0
+cpu5 98 0 94 9644 27 0 0 0 0 0
+intr 68112 0 3078 22811 0 0 0 2 0 0 0 27311 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 597 0 0 0 0 0 3 0 952 2411 1218 2799 1405 2984 0 0 0 77 45 60 190 73 273 0 729 567 0 0 14 0 0 0 0 0 0 0 0 0 0 0 0 514 0
+ctxt 109193
+btime 1701689847
+processes 2518
+procs_running 3
+procs_blocked 0
+softirq 49934 30 3840 2 1309 11 0 206 7439 0 37097
+         "#;
+         let (_, cpu_stat) = parse_cpu_stat(&proc_stat).unwrap();
+         println!("{:?}", cpu_stat);
+    }
+}
